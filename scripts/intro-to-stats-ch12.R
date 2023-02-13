@@ -6,6 +6,7 @@ library(GGally)
 library(emmeans)
 library(performance)
 
+
 #DATA----
 darwin <- read_csv(here("data", "darwin.csv"))
 
@@ -155,22 +156,47 @@ upperCI
 
 #so we are saying that we are confident we would capture the true mean in 95% of our experiments.
 
-#CHAPTER 13---- 
+#CHAPTER 13----
+#remeber z-distribution = normal distribution 
 
-lsmodel0 <- lm(formula = height ~ 1, data = darwin)
+#linear models  = comparision of difference between two groups or comparison of trend for two factors 
 
-summary(lsmodel0)
+#COMPARING GROUPS----
 
-broom::tidy(lsmodel0)
+lsmodel0 <- lm(formula = height ~ 1, data = darwin) #one model type for comparing grous using the least of two squares method/function
 
-lsmodel1 <- lm(height ~ type, data=darwin) # linear model of the difference in means etween types 
+#lm() = specifies we want to analyse a response variable (height) as a function of an explanatory variable using the tilde symbol (~).
+#The simplest possible model ignores any explanatory variables, instead the 1 indicates we just want to estimate an intercept. Without explanatory variables this means the formula will just estimate the overall mean height of all the plants in the dataset.
+
+#SUMMARIES FOR MODELS----
+
+summary(lsmodel0) #to produce a summary of the linear model we have just made 
+
+broom::tidy(lsmodel0) #produces a tibble of the info above = table of coefficients where the 18.9 is the estimate of the model coefficient which is the mean in this case
+
+#these tibbles provide info as the intercept but what does this mean? In this case can prove its the overall mean of all plant heights
+
+mean(darwin$height) # same as the coefficient on the tibble 
+
+#COMPARING MEANS----
+#want a a linear model that analyses the difference in average plant height as a function of pollination type.
+
+lsmodel1 <- lm(height ~ type, data=darwin) # the linear model of the difference in means etween types as above wanted
 
 # note that the following is identical
 
 # lsmodel1 <- lm(height ~ 1 + type, data=darwin)
 
-broom::tidy(lsmodel1)
-summary(lsmodel1)
+broom::tidy(lsmodel1) # now the model contains the intercept (height) as well as the pollination type 
+#now intercept = the mean of the crossed plants as it does it alphabetiicaly (crossed over selfed) while the typecross second row = the difference in the mean height of the two groups
+#where this linear model indicates the average height of Crossed plants is 20.2 inches, and Selfed plants are an average of 2.6 inches shorter
+
+darwin %>% 
+  group_by(type) %>% 
+  summarise(mean=mean(height)) #confirm this 
+
+
+summary(lsmodel1)#summary of everything so far 
 
 darwin %>% 
   ggplot(aes(x=type, 
@@ -181,3 +207,47 @@ darwin %>%
   stat_summary(fun=mean,
                size=1.2)+
   theme_bw() #ue his model summay to make a plot 
+
+#STANDARD ERROR----
+#SEM = standadr error of the mean as we have seen before 
+#SED = standard error of the difference in means 
+
+#CONDFIDENCE LEVELS----
+broom::tidy(lsmodel1, conf.int=T) # Because this follows the same layout as the table of coefficients, the output intercept row gives a 95% CI for the height of the crossed plants and the second row gives a 95% interval for the difference in height between crossed and selfed plants. The lower and upper bounds are the 2.5% and 97.5% of a t-distribution
+
+#now going touse confidence intervals and p values to answer our original question (wether there is a difference in average plant height as a function of pollination type.)
+
+#ANSWERING THE QUESTIONS----
+#read this bit and normal distribution bit if needed 
+#null hypotheis = there is no difference between the crossed and selfed = the mean difference is 0 
+
+#to test this hypothesis = check whether or not the predicted value of our null hypothesis (a difference of zero) lies inside the 95% CI for the difference of the mean
+#i.e if it does with a high level of confidence then can accept this as true for the whole popuation 
+
+GGally::ggcoef_model(lsmodel1,
+                     show_p_values=FALSE, 
+                     conf.level=0.95) #wont let me do it as the packagaes dont work BUT produces a graph of the estimated mean difference with an approx 95% CI.
+
+broom::tidy(lsmodel1, conf.int=T, conf.level=0.99)
+
+darwin %>% 
+  mutate(type=factor(type)) %>% 
+  mutate(type=fct_relevel(type, c("Self", "Cross"))) %>% 
+  lm(height~type, data=.) %>% 
+  broom::tidy() #table of coefficients for the selfed info to get both (like the one before but where selfed is the intercept)
+
+#EMMEANS----
+
+means <- emmeans::emmeans(lsmodel1, specs = ~ type)
+
+means # doing the same thing as the one above 
+
+#CHECKING ASSUMPTIONS----
+
+#Checking:
+# 1. that the residual/unexplained variance in our data is approximately normally distributed.
+
+#2.that the residual/unexplained variance is approximately equal between our groups
+
+#if it IS normally distributed and the variance between the groups IS EQUAL than we can do all the stuff we have so far confidently 
+
