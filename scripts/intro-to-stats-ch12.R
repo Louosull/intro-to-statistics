@@ -5,12 +5,16 @@ library(kableExtra)
 library(GGally)
 library(emmeans)
 library(performance)
+library(rstatix)
 
+
+#Chapter 12----
 
 #DATA----
 darwin <- read_csv(here("data", "darwin.csv"))
+#Hypothesis being tested = whether inbreeding reduced the fitness of the selfed plants
 
-#FIRST ANALYSIS----
+#CLEANING DATA----
 
 # check the structure of the data
 glimpse(darwin)
@@ -59,13 +63,7 @@ darwin %>%
   ggplot(aes(x=type,
              y=height))+
   geom_point()
-
-#going to try other types of graphs just to look at
-
-# geom_boxplot()
-# geom_violin()
-# geom_histogram()
-# Why not have a go and see what you can make?
+#trying some other graphs below 
 
 darwin %>% 
   ggplot(aes(x=type,
@@ -78,6 +76,7 @@ darwin %>%
 
 
 #The graph clearly shows that the average height of the 'crossed' plants is greater than that of the 'selfed' plants. But we need to investigate further in order to determine whether the signal (any apparent differences in mean values) is greater than the level of noise (variance within the different groups).
+
 #COMPARING GROUPS----
 #Findin he mean and standard deviation of our groups as a way of comparing them 
 
@@ -86,30 +85,33 @@ darwin %>%
   summarise(mean=mean(height),
             sd=sd(height)) #STANDARD DEVIATIO = ONAVERAE HOW FAR AWAY EACH POINT IS FROM The mean - lower = all points are on average closer to the mean 
 
-# make a new object
+# make a new object of the mean and standard deviation 
 darwin_summary <-darwin %>% 
   group_by(type) %>% 
   summarise(mean=mean(height),
             sd=sd(height))
 
-# make a summary plot
+# make a summary plot of this mean and standadr deivation for both groups 
 darwin_summary %>% 
   ggplot(aes(x=type,
              y=mean))+
   geom_pointrange(aes(ymin=mean-sd, ymax=mean+sd))+
   theme_bw() #dot is the mean an the line is the standard deviaion around it = plot of our previous mean and SD
 
+
 # use kable extra functions to make a nice table (could be replaced with kable() if needed)
 darwin_summary %>% 
   kbl(caption="Summary statistics of crossed and selfed maize plants") %>% 
   kable_styling(bootstrap_options = "striped", full_width = T, position = "left")
 
-darwin_wide <- darwin %>% 
-  pivot_wider(names_from = type, values_from = height) %>%
-  mutate(difference = Cross - Self)
+#ESTIMATION----
 
 #Our aim = to use use the height of the plants as a proxy for fitness and explicitly address whether there is a difference in the mean heights of the plants between these two groups
 #Our goals - Estimate the mean heights of the plants in these two groups Estimate the mean difference in heights between these two groups Quantify our confidence in these differences
+
+darwin_wide <- darwin %>% 
+  pivot_wider(names_from = type, values_from = height) %>%
+  mutate(difference = Cross - Self) #new column with the difference between the height of crossed from selfed 
 
 difference_summary <- darwin_wide %>% 
   summarise(mean=mean(difference),
@@ -126,6 +128,12 @@ difference_summary_sdtale<- difference_summary %>%
   mutate(se= sd/sqrt(n))
 #estimates of averages or differences should always be accompanied by their measure of uncertainty.
 #so this table is saying  the average difference in height was 2.62 ± 1.22 inches (mean ± SE)
+
+#Standard error is a measure of uncertainty, the larger the standard error the more noise around our data and the more uncertainty we have. The smaller the standard error the more confidence we can have that our difference in means is real.
+
+#Null hypothesis - there is no difference in the mean height of self vs crossed plants
+
+#Alternate hypothesis - inbreeding reduces the fitness of the selfed plants, observed as selfed plants on average being smaller than crossed plants
 
 #NORMAL ISTURBUTION----
 #read it from chapter 12 
@@ -261,8 +269,13 @@ plot(lsmodel1, which=c(2,2))
 #EQUAL VARIANCE----
 performance::check_model(lsmodel1, check="homogeneity")
 # read chapter 13 bit 
+#SUMMARY---- 
+#So remember a linear model sets one factor level as the 'intercept' estimates its mean, then draws a line from the first treatment to the second treatment, the slope of the line is the difference in means between the two treatments.
+
+#The difference in means is always accompanied by a standard error of the difference (SED), and this can be used to calculate a 95% confidence interval. If this confidence interval does not contain the intercept value, we can reject the null hypothesis that there is 'no effect'.
 
 #CHAPTER 14 ---- 
+
 # STUDENTS T-TEST ----
 
 #The one sample t-test: takes the mean of a sample and compares it with 
@@ -363,6 +376,106 @@ y %>%
 
 #However we also learned to appreciate the potential issues around making Type 1 and Type 2 errors, and how an appreciation of confidence intervals and standardised effect sizes can be used to assess these.
 
+#Chapter 15---- 
+
+#So far we have used linear models for analyses between two 'categorical' explanatory variables e.g. t-tests. But what about when we have a 'continuous' explanatory variable? For that we need to use a regression analysis
+
+#the regression analysis is interpreting the strength of the 'signal' (the change in mean values according to the explanatory variable), vs the amount of 'noise' (variance around the mean)
+#With regression, we can test the biological hypothesis that wood density can be used to predict timber hardness, and use this regression to predict timber hardness for new samples of known density
+
+
+#DATA READ IN AND CHECK----
+
+#DATA----
+janka <- read_csv(here("data", "janka.csv"))
+
+#FIRST ANALYSIS----
+
+# check the structure of the data
+glimpse(janka)
+
+# check data is in a tidy format
+head(janka)
+
+# check variable names
+colnames(janka)
+
+
+# clean up column names
+
+janka <- janitor::clean_names(janka)
+
+# check for duplication
+janka %>% 
+  duplicated() %>% 
+  sum()
+
+# check for typos - by looking at impossible values
+janka %>% 
+  summarise(min=min(hardness, na.rm=TRUE), 
+            max=max(hardness, na.rm=TRUE),
+            min=min(dens, na.rm=TRUE), 
+            max=max(dens, na.rm=TRUE))
+
+
+# missing values
+janka %>% 
+  is.na() %>% 
+  sum()
+
+# quick summary
+
+summary(janka)
+
+#FIRST PLOT----
+
+janka %>% 
+  ggplot(aes(x=dens, y=hardness))+
+  geom_point()
+#Wood density and timber hardness appear to be positively related, and the relationship appears to be fairly linear. We can look at a simple strength of this association between dens and hardness using correlation
+
+#Pearsons R---- 
+correlation <- cor(janka$dens, janka$hardness, method = 'pearson')
+correlation #checking the results 
+
+#Correlation coefficients range from -1 to 1 for perfectly negative to perfectly positive linear relationships. The relationship here appears to be strongly positive. Correlation looks at the association between two variables, but we want to go further - we are arguing that wood density causes higher values of timber hardness. In order to test that hypothesis we need to go further than correlation and use regression.
+
+#Regression in R----
+
+janka_ls1 <- lm(hardness ~ dens, data = janka) #te linear reresion in R  
+summary(janka_ls1)
+
+janka_ls1 %>% 
+  broom::tidy() #explianed - intercept estimate means the mean, the standard error on the first row i for the intercept data and t statsitic 
+#dens line esimate is the difference of dens mean from the hardness mean, stadard error = SED, 
+
+
+#This linear model will estimate a 'line of best fit' using the method of 'least squares' to minimise the error sums of squares (the average distance between the data points and the regression line).
+
+# specify linear model method for line fitting
+
+janka %>% 
+  ggplot(aes(x=dens, y=hardness))+
+  geom_point()+
+  geom_smooth(method="lm") #ading the linear regression line to our plot o far 
 
 
 
+#MAN CENTRED REGRESSION----
+
+dens_mean <- janka %>% 
+  summarise(mean_dens=mean(dens))
+
+
+janka %>% 
+  mutate(centered_dens = dens-pull(dens_mean)) %>% 
+  lm(hardness ~ centered_dens, data = .) %>% 
+  broom::tidy()
+
+#The second row is labelled 'dens'. Density is our explanatory variable, and the slope is estimated against it. So if 57.5 is the value of the regression slope (with its standard error) - then the timber hardness is predicted to increase by 57.5 on the janka scale for every unit change of density.
+
+#According to our model summary, this estimated change in the mean is statistically significant - so for this effect size and sample size it is unlikely that we would observe this relationship if the null hypothesis (that we cannot predict timber hardness from wood density) were true.
+
+#CONFIDENCE INTERVALS----
+
+broom::tidy(janka_ls1, conf.int=T, conf.level=0.95)
