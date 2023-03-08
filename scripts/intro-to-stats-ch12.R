@@ -276,6 +276,8 @@ performance::check_model(lsmodel1, check="homogeneity")
 
 #CHAPTER 14 ---- 
 
+#Thus far we have leanrt how to calculate estimates, estimates of mean difference and confidence intervals
+
 # STUDENTS T-TEST ----
 
 #The one sample t-test: takes the mean of a sample and compares it with 
@@ -314,14 +316,19 @@ tibble(df,critical_t) %>%
 lsmodel1 <- lm(height ~ type, data = darwin) #linar model viewed again 
 summary(lsmodel1) #his coducst some tests for us anyway 
 
-tidy_model1 <- broom::tidy(lsmodel1)
+tidy_model1 <- broom::tidy(lsmodel1) #where statistic means observed t-value 
 
 tidy_model1[[2,2]] / tidy_model1[[2,3]] #finding the observed value of t 
 
 # PAIRED T-TEST ----
 
+#so far our linear model has produced a standard two sample t-test (i.e difference between two groups)
 lsmodel_darwin <- lm(height ~ type + factor(pair), data = darwin)
 summary(lsmodel_darwin)
+darwin %>% 
+  mutate(pair = as_factor(pair)) %>% 
+  lm(height ~ type + pair, data = .) %>% 
+  broom::tidy()
 
 #The second row now compares the mean heights of Crossed and Selfed plants 
 #when they are in the same pair
